@@ -1,0 +1,14 @@
+version: "3.9"
+
+services:
+  dns-sinkhole:
+    build: .
+    container_name: dns-sinkhole
+    ports:
+      - "53:53/udp"      # DNS
+      - "5000:5000/tcp"  # Dashboard
+    volumes:
+      - ./dns_sinkhole.db:/app/dns_sinkhole.db   # Persist database
+    restart: unless-stopped
+    cap_add:
+      - NET_BIND_SERVICE   # Allows binding to port 53

@@ -1,0 +1,834 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>DNS Sinkhole — Dashboard</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
+  <style>
+    :root {
+      --bg:       #1e2433;
+      --bg2:      #252d3d;
+      --panel:    #2d3748;
+      --panel2:   #323c52;
+      --border:   #3d4a63;
+      --accent:   #60a5fa;
+      --accent2:  #93c5fd;
+      --danger:   #f87171;
+      --success:  #4ade80;
+      --warning:  #fbbf24;
+      --info:     #c084fc;
+      --text:     #e2e8f0;
+      --text2:    #94a3b8;
+      --muted:    #64748b;
+      --font:     'Inter', sans-serif;
+      --mono:     'JetBrains Mono', monospace;
+    }
+
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: var(--font);
+      min-height: 100vh;
+    }
+
+    /* ── Header ── */
+    header {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 14px 32px;
+      background: var(--bg2);
+      border-bottom: 1px solid var(--border);
+      position: sticky; top: 0; z-index: 100;
+      box-shadow: 0 1px 8px rgba(0,0,0,0.06);
+    }
+    .logo { display: flex; align-items: center; gap: 12px; }
+    .logo-shield {
+      width: 40px; height: 40px; font-size: 20px;
+      background: linear-gradient(135deg, #3b82f6, #2563eb);
+      border-radius: 10px; display: flex; align-items: center; justify-content: center;
+      box-shadow: 0 2px 8px rgba(59,130,246,0.3);
+    }
+    .logo-name    { font-size: 18px; font-weight: 700; color: var(--text); }
+    .logo-tagline { font-size: 12px; color: var(--muted); margin-top: 1px; }
+
+    .toggle-btn {
+      display: flex; align-items: center; gap: 8px;
+      padding: 8px 16px; border-radius: 8px; cursor: pointer;
+      border: 1.5px solid var(--success);
+      background: rgba(74,222,128,0.1); color: var(--success);
+      font-size: 13px; font-weight: 600; font-family: var(--font); transition: all .2s;
+    }
+    .toggle-btn.off { border-color: var(--danger); background: rgba(248,113,113,0.1); color: var(--danger); }
+    .dot {
+      width: 8px; height: 8px; border-radius: 50%;
+      background: var(--success); box-shadow: 0 0 6px var(--success);
+      animation: blink 2s infinite;
+    }
+    .toggle-btn.off .dot { background: var(--danger); box-shadow: 0 0 6px var(--danger); animation: none; }
+    @keyframes blink { 0%,100%{opacity:1} 50%{opacity:.3} }
+
+    /* ── Live clock in header ── */
+    .live-clock {
+      font-family: var(--mono); font-size: 13px; color: var(--text2);
+      background: var(--panel2); border: 1px solid var(--border);
+      padding: 6px 14px; border-radius: 8px; letter-spacing: 1px;
+    }
+
+    /* ── Nav ── */
+    .container { max-width: 1300px; margin: 0 auto; padding: 24px 32px; }
+    nav { display: flex; gap: 4px; margin-bottom: 28px; border-bottom: 2px solid var(--border); }
+    .tab {
+      padding: 9px 20px; font-size: 14px; font-weight: 600;
+      color: var(--muted); background: none; border: none;
+      border-bottom: 3px solid transparent; margin-bottom: -2px;
+      cursor: pointer; transition: all .2s; border-radius: 4px 4px 0 0;
+    }
+    .tab:hover  { color: var(--text2); background: var(--panel2); }
+    .tab.active { color: var(--accent); border-bottom-color: var(--accent); background: rgba(96,165,250,0.08); }
+    .page { display: none; } .page.active { display: block; }
+
+    /* ── Explainer ── */
+    .explainer {
+      background: rgba(96,165,250,0.08); border: 1px solid rgba(96,165,250,0.2);
+      border-left: 4px solid var(--accent); border-radius: 10px;
+      padding: 14px 18px; margin-bottom: 24px;
+      display: flex; gap: 12px; align-items: flex-start;
+    }
+    .explainer-icon  { font-size: 22px; flex-shrink: 0; }
+    .explainer-title { font-size: 14px; font-weight: 700; color: var(--accent2); margin-bottom: 3px; }
+    .explainer-text  { font-size: 13px; color: var(--text2); line-height: 1.7; }
+
+    /* ── Flow ── */
+    .flow {
+      display: flex; align-items: stretch; gap: 8px;
+      background: var(--panel); border: 1px solid var(--border); border-radius: 12px;
+      padding: 16px 20px; margin-bottom: 24px; flex-wrap: wrap;
+      box-shadow: 0 1px 4px rgba(0,0,0,0.04);
+    }
+    .flow-step {
+      display: flex; align-items: flex-start; gap: 10px;
+      background: var(--panel2); border: 1px solid var(--border); border-radius: 8px;
+      padding: 12px 14px; flex: 1; min-width: 150px;
+    }
+    .flow-step-icon  { font-size: 20px; flex-shrink: 0; }
+    .flow-step-title { font-size: 12px; font-weight: 700; color: var(--text); }
+    .flow-step-desc  { font-size: 11px; color: var(--muted); line-height: 1.5; margin-top: 3px; }
+    .flow-arrow      { font-size: 18px; color: var(--muted); align-self: center; flex-shrink: 0; }
+
+    /* ── Stat cards ── */
+    .stat-grid { display: grid; grid-template-columns: repeat(4,1fr); gap: 16px; margin-bottom: 24px; }
+    .stat-card {
+      background: var(--panel); border: 1px solid var(--border); border-radius: 12px;
+      padding: 20px; transition: transform .2s, box-shadow .2s;
+      box-shadow: 0 1px 4px rgba(0,0,0,0.05);
+    }
+    .stat-card:hover { transform: translateY(-2px); box-shadow: 0 6px 20px rgba(0,0,0,0.08); }
+    .stat-top  { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 12px; }
+    .stat-icon { width: 42px; height: 42px; border-radius: 10px; display: flex; align-items: center; justify-content: center; font-size: 18px; }
+    .stat-icon.blue   { background: rgba(96,165,250,0.15); }
+    .stat-icon.red    { background: rgba(248,113,113,0.15); }
+    .stat-icon.green  { background: rgba(74,222,128,0.15); }
+    .stat-icon.purple { background: rgba(192,132,252,0.15); }
+    .stat-tooltip { font-size: 11px; color: var(--muted); text-align: right; max-width: 110px; line-height: 1.4; }
+    .stat-value { font-size: 36px; font-weight: 700; font-family: var(--mono); line-height: 1; margin-bottom: 4px; }
+    .stat-card.blue   .stat-value { color: var(--accent); }
+    .stat-card.red    .stat-value { color: var(--danger); }
+    .stat-card.green  .stat-value { color: var(--success); }
+    .stat-card.purple .stat-value { color: var(--info); }
+    .stat-label { font-size: 13px; font-weight: 600; color: var(--text2); }
+    .stat-sub   { font-size: 11px; color: var(--muted); margin-top: 3px; }
+    .stat-bar   { height: 3px; background: var(--border); border-radius: 2px; margin-top: 14px; }
+    .stat-bar-fill { height: 100%; border-radius: 2px; transition: width 1s; }
+    .stat-card.blue   .stat-bar-fill { background: var(--accent); }
+    .stat-card.red    .stat-bar-fill { background: var(--danger); }
+    .stat-card.green  .stat-bar-fill { background: var(--success); }
+    .stat-card.purple .stat-bar-fill { background: var(--info); }
+
+    /* ── Charts ── */
+    .chart-row { display: grid; grid-template-columns: 3fr 2fr; gap: 16px; margin-bottom: 24px; }
+    .two-col   { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 24px; }
+    .panel {
+      background: var(--panel); border: 1px solid var(--border); border-radius: 12px;
+      padding: 20px 24px; box-shadow: 0 1px 4px rgba(0,0,0,0.05);
+    }
+    .panel-title { font-size: 14px; font-weight: 700; color: var(--text); }
+    .panel-desc  { font-size: 12px; color: var(--muted); margin-top: 3px; line-height: 1.5; margin-bottom: 14px; }
+
+    /* ── Top lists ── */
+    .top-item {
+      display: flex; align-items: center; gap: 10px;
+      padding: 9px 0; border-bottom: 1px solid var(--border);
+    }
+    .top-item:last-child { border: none; }
+    .top-rank   { font-size: 11px; color: var(--muted); font-family: var(--mono); width: 20px; flex-shrink: 0; }
+    .top-domain { font-size: 12px; color: var(--text); font-family: var(--mono); flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .top-bar-bg { width: 70px; height: 4px; background: var(--border); border-radius: 2px; flex-shrink: 0; }
+    .top-bar-fill { height: 100%; border-radius: 2px; transition: width .8s; }
+    .top-count  { font-size: 11px; font-family: var(--mono); color: var(--muted); width: 24px; text-align: right; flex-shrink: 0; }
+
+    /* ── Tables ── */
+    .filters { display: flex; gap: 10px; margin-bottom: 14px; flex-wrap: wrap; align-items: center; }
+    input[type=text], select {
+      background: var(--panel); border: 1px solid var(--border); border-radius: 8px;
+      color: var(--text); padding: 8px 12px; font-family: var(--font); font-size: 13px; outline: none;
+      transition: border .2s; box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+    }
+    input[type=text]:focus, select:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(59,130,246,0.1); }
+    input[type=text] { width: 260px; }
+
+    .table-wrap { overflow-x: auto; border-radius: 8px; border: 1px solid var(--border); }
+    table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    thead { background: var(--panel2); }
+    th {
+      font-size: 11px; font-weight: 600; letter-spacing: .5px; text-transform: uppercase;
+      color: var(--muted); padding: 11px 16px; text-align: left;
+      border-bottom: 1px solid var(--border);
+    }
+    td { padding: 11px 16px; border-bottom: 1px solid var(--border); color: var(--text2); }
+    td.dm { color: var(--text); font-family: var(--mono); font-size: 12px; font-weight: 500; }
+    tr:last-child td { border-bottom: none; }
+    tr:hover td { background: rgba(96,165,250,0.04); }
+
+    /* ── Timestamp cell — this is the key part ── */
+    .timestamp-cell {
+      display: flex; flex-direction: column; gap: 2px;
+    }
+    .ts-date { font-size: 12px; color: var(--text2); font-weight: 500; }
+    .ts-time { font-size: 13px; color: var(--text); font-family: var(--mono); font-weight: 600; }
+    .ts-ago  { font-size: 10px; color: var(--muted); margin-top: 1px; }
+
+    /* ── Badges ── */
+    .badge {
+      display: inline-flex; align-items: center; gap: 5px;
+      padding: 4px 10px; font-size: 11px; font-weight: 700;
+      border-radius: 20px; text-transform: uppercase;
+    }
+    .badge::before { content:''; width:6px; height:6px; border-radius:50%; }
+    .badge-blocked { background: rgba(248,113,113,0.15); color: var(--danger); border: 1px solid rgba(248,113,113,0.3); }
+    .badge-blocked::before { background: var(--danger); }
+    .badge-allowed { background: rgba(74,222,128,0.12); color: var(--success); border: 1px solid rgba(74,222,128,0.3); }
+    .badge-allowed::before { background: var(--success); }
+    .badge-cat {
+      background: rgba(96,165,250,0.12); color: var(--accent2); border: 1px solid rgba(96,165,250,0.25);
+      border-radius: 6px; padding: 2px 8px; font-size: 10px; font-weight: 600;
+    }
+
+    /* ── Buttons ── */
+    .btn {
+      padding: 8px 16px; border-radius: 8px; font-family: var(--font);
+      font-size: 13px; font-weight: 600; border: none; cursor: pointer; transition: all .2s;
+    }
+    .btn-primary { background: var(--accent); color: white; box-shadow: 0 2px 8px rgba(59,130,246,0.3); }
+    .btn-primary:hover { background: var(--accent2); transform: translateY(-1px); }
+    .btn-outline { background: var(--panel); color: var(--text2); border: 1px solid var(--border); }
+    .btn-outline:hover { border-color: var(--accent); color: var(--accent); }
+    .btn-danger { background: rgba(248,113,113,0.12); color: var(--danger); border: 1px solid rgba(248,113,113,0.3); }
+    .btn-danger:hover { background: rgba(248,113,113,0.22); }
+    .btn-sm { padding: 5px 12px; font-size: 12px; }
+
+    /* ── Add form ── */
+    .add-form {
+      background: var(--panel); border: 1px solid var(--border); border-radius: 12px;
+      padding: 20px 24px; margin-bottom: 20px; box-shadow: 0 1px 4px rgba(0,0,0,0.05);
+    }
+    .add-form-title { font-size: 14px; font-weight: 700; color: var(--text); margin-bottom: 4px; }
+    .add-form-desc  { font-size: 12px; color: var(--muted); margin-bottom: 16px; }
+    .add-form-row   { display: flex; gap: 12px; flex-wrap: wrap; align-items: flex-end; }
+    .form-group     { display: flex; flex-direction: column; gap: 5px; flex: 1; min-width: 140px; }
+    .form-label     { font-size: 11px; font-weight: 600; color: var(--text2); text-transform: uppercase; letter-spacing: .5px; }
+
+    /* ── Test tool ── */
+    .test-hero {
+      background: linear-gradient(135deg, rgba(96,165,250,0.08), rgba(192,132,252,0.08));
+      border: 1px solid rgba(96,165,250,0.2); border-radius: 12px; padding: 28px; margin-bottom: 20px;
+    }
+    .test-title { font-size: 18px; font-weight: 700; color: var(--text); margin-bottom: 6px; }
+    .test-desc  { font-size: 13px; color: var(--text2); line-height: 1.6; margin-bottom: 20px; }
+    .test-row   { display: flex; gap: 10px; margin-bottom: 8px; }
+    .test-row input { flex: 1; font-size: 14px; padding: 10px 14px; }
+    .test-result {
+      border-radius: 10px; padding: 16px 18px; font-size: 14px;
+      line-height: 1.7; display: none; margin-top: 12px;
+    }
+    .test-result.blocked { background: rgba(248,113,113,0.1); border: 1px solid rgba(248,113,113,0.3); color: var(--danger); }
+    .test-result.allowed { background: rgba(74,222,128,0.08); border: 1px solid rgba(74,222,128,0.3); color: var(--success); }
+    .quick-btn {
+      padding: 6px 14px; background: var(--panel); border: 1px solid var(--border); border-radius: 20px;
+      color: var(--text2); font-size: 12px; font-family: var(--mono); cursor: pointer; transition: all .2s;
+    }
+    .quick-btn:hover { border-color: var(--accent); color: var(--accent); background: #eff6ff; }
+
+    /* ── Toast ── */
+    #toast {
+      position: fixed; bottom: 24px; right: 24px; z-index: 9999;
+      padding: 12px 20px; border-radius: 10px; font-size: 13px; font-weight: 500;
+      background: var(--panel2); border: 1px solid var(--border); color: var(--text);
+      box-shadow: 0 8px 24px rgba(0,0,0,0.12); opacity: 0; transition: opacity .3s; pointer-events: none;
+    }
+    #toast.show { opacity: 1; }
+    .empty-state { padding: 40px; text-align: center; color: var(--muted); font-size: 13px; }
+
+    @media (max-width: 900px) {
+      .stat-grid { grid-template-columns: repeat(2,1fr); }
+      .chart-row, .two-col { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+
+<!-- ── Header ── -->
+<header>
+  <div class="logo">
+    <div class="logo-shield">🛡️</div>
+    <div>
+      <div class="logo-name">DNS Sinkhole</div>
+      <div class="logo-tagline">Blocking bad domains before they load</div>
+    </div>
+  </div>
+  <div style="display:flex;align-items:center;gap:12px">
+    <div class="live-clock" id="liveClock">--:--:--</div>
+    <div id="toggleBtn" class="toggle-btn" onclick="toggleSinkhole()">
+      <div class="dot" id="dot"></div>
+      <span id="toggleText">Protection ON</span>
+    </div>
+  </div>
+</header>
+
+<div class="container">
+  <nav>
+    <button class="tab active" onclick="showTab('overview',this)">📊 Overview</button>
+    <button class="tab" onclick="showTab('logs',this)">📋 Query Logs</button>
+    <button class="tab" onclick="showTab('blocklist',this)">🚫 Blocklist</button>
+    <button class="tab" onclick="showTab('test',this)">🧪 Test a Domain</button>
+  </nav>
+
+  <!-- ══ OVERVIEW ══ -->
+  <div id="page-overview" class="page active">
+
+    <div class="explainer">
+      <div class="explainer-icon">💡</div>
+      <div>
+        <div class="explainer-title">What is this dashboard showing me?</div>
+        <div class="explainer-text">
+          Every time you visit a website, your computer first asks "what's the IP address for this site?" — that's called a <strong>DNS query</strong>.
+          Your sinkhole intercepts every single one of those questions. If the site is on the blocklist (ads, trackers, malware),
+          it returns a fake IP so your computer never connects. If it's safe, it gets the real IP and loads normally.
+          Everything is logged with the <strong>exact date and time</strong> — go to the Query Logs tab to see it.
+        </div>
+      </div>
+    </div>
+
+    <div class="flow">
+      <div class="flow-step">
+        <div class="flow-step-icon">💻</div>
+        <div>
+          <div class="flow-step-title">1. You visit a website</div>
+          <div class="flow-step-desc">Your browser needs the IP address of the site you're visiting</div>
+        </div>
+      </div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-step">
+        <div class="flow-step-icon">🛡️</div>
+        <div>
+          <div class="flow-step-title">2. Sinkhole intercepts</div>
+          <div class="flow-step-desc">We check the domain against the blocklist and log the time</div>
+        </div>
+      </div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-step">
+        <div class="flow-step-icon">🚫</div>
+        <div>
+          <div class="flow-step-title">3a. BLOCKED</div>
+          <div class="flow-step-desc">Bad domain → fake IP 0.0.0.0 → no connection made</div>
+        </div>
+      </div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-step">
+        <div class="flow-step-icon">✅</div>
+        <div>
+          <div class="flow-step-title">3b. ALLOWED</div>
+          <div class="flow-step-desc">Safe domain → real IP from Google DNS → site loads</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="stat-grid">
+      <div class="stat-card blue">
+        <div class="stat-top">
+          <div class="stat-icon blue">🌐</div>
+          <div class="stat-tooltip">Total DNS questions intercepted since the sinkhole started</div>
+        </div>
+        <div class="stat-value" id="stat-total">—</div>
+        <div class="stat-label">Total Queries</div>
+        <div class="stat-sub">All DNS lookups seen</div>
+        <div class="stat-bar"><div class="stat-bar-fill" style="width:100%"></div></div>
+      </div>
+      <div class="stat-card red">
+        <div class="stat-top">
+          <div class="stat-icon red">🚫</div>
+          <div class="stat-tooltip">Ads, trackers and malware domains that were blocked</div>
+        </div>
+        <div class="stat-value" id="stat-blocked">—</div>
+        <div class="stat-label">Blocked</div>
+        <div class="stat-sub" id="stat-rate">— of all queries</div>
+        <div class="stat-bar"><div class="stat-bar-fill" id="block-bar" style="width:0%"></div></div>
+      </div>
+      <div class="stat-card green">
+        <div class="stat-top">
+          <div class="stat-icon green">✅</div>
+          <div class="stat-tooltip">Safe websites that were forwarded to Google DNS normally</div>
+        </div>
+        <div class="stat-value" id="stat-allowed">—</div>
+        <div class="stat-label">Allowed</div>
+        <div class="stat-sub">Forwarded to Google DNS</div>
+        <div class="stat-bar"><div class="stat-bar-fill" id="allow-bar" style="width:0%"></div></div>
+      </div>
+      <div class="stat-card purple">
+        <div class="stat-top">
+          <div class="stat-icon purple">📋</div>
+          <div class="stat-tooltip">How many domains are on the blocklist right now</div>
+        </div>
+        <div class="stat-value" id="stat-blocklist">—</div>
+        <div class="stat-label">Blocklist Size</div>
+        <div class="stat-sub">Domains being watched</div>
+        <div class="stat-bar"><div class="stat-bar-fill" style="width:100%"></div></div>
+      </div>
+    </div>
+
+    <div class="chart-row">
+      <div class="panel">
+        <div class="panel-title">📈 Query Activity — Last 24 Hours</div>
+        <div class="panel-desc">Each bar = 1 hour. Height = how many DNS queries happened that hour. Taller = more browsing activity.</div>
+        <canvas id="activityChart" height="100"></canvas>
+      </div>
+      <div class="panel">
+        <div class="panel-title">🏷️ What's Being Blocked?</div>
+        <div class="panel-desc">Categories of blocked traffic — are most blocks ads, malware, or trackers?</div>
+        <canvas id="categoryChart" height="160"></canvas>
+      </div>
+    </div>
+
+    <div class="two-col">
+      <div class="panel">
+        <div class="panel-title">🔥 Most Blocked Domains</div>
+        <div class="panel-desc">Bad domains hitting your blocklist the most. Longer bar = blocked more times.</div>
+        <div id="topBlocked"></div>
+      </div>
+      <div class="panel">
+        <div class="panel-title">🌍 Most Visited Domains</div>
+        <div class="panel-desc">Websites your computer visits most (blocked + allowed combined).</div>
+        <div id="topQueried"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══ LOGS ══ -->
+  <div id="page-logs" class="page">
+
+    <div class="explainer">
+      <div class="explainer-icon">📋</div>
+      <div>
+        <div class="explainer-title">Every website visit — logged with exact date and time</div>
+        <div class="explainer-text">
+          Each row = one website your computer tried to visit.
+          The <strong>When</strong> column shows the <strong>exact date and time</strong> it happened — for example "21 Apr 2026 at 17:45:32".
+          <span style="color:var(--danger);font-weight:600">BLOCKED</span> = we stopped it.
+          <span style="color:var(--success);font-weight:600">ALLOWED</span> = it went through.
+          Use the search box to find a specific site, or filter to see only blocked traffic.
+        </div>
+      </div>
+    </div>
+
+    <div class="filters">
+      <input type="text" id="logSearch" placeholder="🔍  Search by domain — e.g. google.com" oninput="loadLogs()">
+      <select id="logFilter" onchange="loadLogs()">
+        <option value="">Show All</option>
+        <option value="BLOCKED">🚫 Blocked Only</option>
+        <option value="ALLOWED">✅ Allowed Only</option>
+      </select>
+      <button class="btn btn-outline btn-sm" onclick="loadLogs()">↻ Refresh</button>
+      <button class="btn btn-danger btn-sm" onclick="clearLogs()">🗑 Clear All Logs</button>
+    </div>
+
+    <div class="panel" style="padding:0">
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>#</th>
+              <th>Domain (website visited)</th>
+              <th>Who asked</th>
+              <th>Result</th>
+              <th>📅 When (Date &amp; Time)</th>
+            </tr>
+          </thead>
+          <tbody id="logsBody"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══ BLOCKLIST ══ -->
+  <div id="page-blocklist" class="page">
+
+    <div class="explainer">
+      <div class="explainer-icon">🚫</div>
+      <div>
+        <div class="explainer-title">The Blocklist — your list of banned websites</div>
+        <div class="explainer-text">
+          Any domain here is <strong>instantly blocked</strong> — no connection is ever made.
+          Add your own domains to block anything you want.
+          Blocking <code style="background:rgba(96,165,250,0.15);padding:1px 6px;border-radius:4px;color:var(--accent2)">example.com</code>
+          also automatically blocks all subdomains like <code style="background:rgba(96,165,250,0.15);padding:1px 6px;border-radius:4px;color:var(--accent2)">ads.example.com</code>.
+        </div>
+      </div>
+    </div>
+
+    <div class="add-form">
+      <div class="add-form-title">➕ Block a New Domain</div>
+      <div class="add-form-desc">Enter any website you want to block. It takes effect immediately — no restart needed.</div>
+      <div class="add-form-row">
+        <div class="form-group" style="flex:2">
+          <div class="form-label">Domain name</div>
+          <input type="text" id="newDomain" placeholder="e.g. ads.example.com">
+        </div>
+        <div class="form-group">
+          <div class="form-label">Category</div>
+          <select id="newCategory">
+            <option value="custom">Custom / Other</option>
+            <option value="ads">Ads</option>
+            <option value="tracker">Tracker</option>
+            <option value="malware">Malware</option>
+            <option value="phishing">Phishing</option>
+          </select>
+        </div>
+        <div class="form-group" style="flex:2">
+          <div class="form-label">Reason (optional)</div>
+          <input type="text" id="newReason" placeholder="Why are you blocking this?">
+        </div>
+        <div class="form-group" style="flex:0 0 auto;justify-content:flex-end">
+          <div class="form-label">&nbsp;</div>
+          <button class="btn btn-primary" onclick="addDomain()">Block Domain</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="filters">
+      <input type="text" id="blockSearch" placeholder="🔍  Search blocklist..." oninput="loadBlocklist()">
+    </div>
+
+    <div class="panel" style="padding:0">
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>#</th>
+              <th>Domain (blocked website)</th>
+              <th>Type</th>
+              <th>Reason / Notes</th>
+              <th>📅 Date Added</th>
+              <th>Remove</th>
+            </tr>
+          </thead>
+          <tbody id="blocklistBody"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══ TEST ══ -->
+  <div id="page-test" class="page">
+    <div class="test-hero">
+      <div class="test-title">🧪 Test Any Domain</div>
+      <div class="test-desc">
+        Type any website and click <strong>Test It</strong> to see if your sinkhole would block or allow it.
+        This simulates exactly what happens when you visit that site — without actually visiting it.
+        Every test is also logged in the Query Logs tab with the exact time!
+      </div>
+      <div class="test-row">
+        <input type="text" id="testDomain" placeholder="Type any domain — e.g. google.com or doubleclick.net"
+               onkeydown="if(event.key==='Enter') runTest()">
+        <button class="btn btn-primary" onclick="runTest()" style="padding:10px 24px;font-size:14px;">▶ Test It</button>
+      </div>
+      <div id="testResult" class="test-result"></div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-title">⚡ Quick Examples</div>
+      <div class="panel-desc">Click any domain below to test it instantly. See which ones get blocked and which don't.</div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:4px">
+        <button class="quick-btn" onclick="quickTest('doubleclick.net')">doubleclick.net</button>
+        <button class="quick-btn" onclick="quickTest('ads.google.com')">ads.google.com</button>
+        <button class="quick-btn" onclick="quickTest('malware-test.com')">malware-test.com</button>
+        <button class="quick-btn" onclick="quickTest('googlesyndication.com')">googlesyndication.com</button>
+        <button class="quick-btn" onclick="quickTest('google.com')">google.com</button>
+        <button class="quick-btn" onclick="quickTest('github.com')">github.com</button>
+        <button class="quick-btn" onclick="quickTest('youtube.com')">youtube.com</button>
+        <button class="quick-btn" onclick="quickTest('python.org')">python.org</button>
+      </div>
+      <div style="margin-top:16px;padding:14px;background:var(--panel2);border-radius:8px;font-size:12px;color:var(--text2);line-height:1.7;border:1px solid var(--border)">
+        💡 <strong>How to read the result:</strong><br>
+        🚫 <strong style="color:var(--danger)">BLOCKED</strong> — Sinkhole returns fake IP 0.0.0.0. Your computer can't connect. Ad/tracker never loads.<br>
+        ✅ <strong style="color:var(--success)">ALLOWED</strong> — Real IP returned from Google DNS (8.8.8.8). The site loads normally.
+      </div>
+    </div>
+  </div>
+
+</div>
+<div id="toast"></div>
+
+<script>
+// ── Live clock ────────────────────────────────────
+function updateClock() {
+  const now = new Date();
+  document.getElementById('liveClock').textContent = now.toLocaleTimeString('en-GB', {
+    hour:'2-digit', minute:'2-digit', second:'2-digit'
+  });
+}
+updateClock();
+setInterval(updateClock, 1000);
+
+// ── Format timestamp — the key function ──────────
+function fmtTimestamp(s) {
+  if (!s) return { date: '—', time: '—', ago: '' };
+  const d = new Date(s);
+  const date = d.toLocaleDateString('en-GB', { day:'2-digit', month:'short', year:'numeric' });
+  const time = d.toLocaleTimeString('en-GB', { hour:'2-digit', minute:'2-digit', second:'2-digit' });
+
+  // Time ago
+  const diffMs  = Date.now() - d.getTime();
+  const diffSec = Math.floor(diffMs / 1000);
+  const diffMin = Math.floor(diffSec / 60);
+  const diffHr  = Math.floor(diffMin / 60);
+  let ago = '';
+  if      (diffSec < 60)  ago = `${diffSec}s ago`;
+  else if (diffMin < 60)  ago = `${diffMin}m ago`;
+  else if (diffHr  < 24)  ago = `${diffHr}h ago`;
+  else                    ago = `${Math.floor(diffHr/24)}d ago`;
+
+  return { date, time, ago };
+}
+
+function tsCell(s) {
+  const { date, time, ago } = fmtTimestamp(s);
+  return `<div class="timestamp-cell">
+    <div class="ts-date">${date}</div>
+    <div class="ts-time">${time}</div>
+    <div class="ts-ago">${ago}</div>
+  </div>`;
+}
+
+// ── Tabs ──────────────────────────────────────────
+function showTab(name, btn) {
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  document.getElementById('page-' + name).classList.add('active');
+  btn.classList.add('active');
+  if (name === 'logs')      loadLogs();
+  if (name === 'blocklist') loadBlocklist();
+}
+
+function toast(msg, type = 'info') {
+  const el = document.getElementById('toast');
+  const c = { success:'#16a34a', danger:'#dc2626', info:'#3b82f6' };
+  el.style.borderLeft = `3px solid ${c[type]||c.info}`;
+  el.textContent = msg;
+  el.classList.add('show');
+  setTimeout(() => el.classList.remove('show'), 3000);
+}
+
+// ── Stats ─────────────────────────────────────────
+let actChart, catChart;
+async function loadStats() {
+  const r = await fetch('/api/stats').then(r => r.json());
+  document.getElementById('stat-total').textContent     = r.total.toLocaleString();
+  document.getElementById('stat-blocked').textContent   = r.blocked.toLocaleString();
+  document.getElementById('stat-allowed').textContent   = r.allowed.toLocaleString();
+  document.getElementById('stat-blocklist').textContent = r.blocklist_count.toLocaleString();
+  document.getElementById('stat-rate').textContent      = `${r.block_rate}% of all queries`;
+  document.getElementById('block-bar').style.width      = r.block_rate + '%';
+  document.getElementById('allow-bar').style.width      = (100 - r.block_rate) + '%';
+
+  if (actChart) actChart.destroy();
+  actChart = new Chart(document.getElementById('activityChart'), {
+    type: 'bar',
+    data: {
+      labels: r.hourly.length ? r.hourly.map(h => h.hour) : ['No data yet'],
+      datasets: [{ label: 'Queries',
+        data: r.hourly.length ? r.hourly.map(h => h.count) : [0],
+        backgroundColor: 'rgba(59,130,246,0.2)',
+        borderColor: 'rgba(59,130,246,0.8)',
+        borderWidth: 1, borderRadius: 4 }]
+    },
+    options: {
+      responsive: true,
+      plugins: { legend:{display:false}, tooltip:{callbacks:{label: ctx => ` ${ctx.raw} DNS queries`}} },
+      scales: {
+        x: { ticks:{color:'#64748b',font:{size:10}}, grid:{color:'rgba(255,255,255,0.05)'} },
+        y: { ticks:{color:'#64748b',font:{size:10}}, grid:{color:'rgba(255,255,255,0.05)'} }
+      }
+    }
+  });
+
+  if (catChart) catChart.destroy();
+  const cats = r.categories;
+  catChart = new Chart(document.getElementById('categoryChart'), {
+    type: 'doughnut',
+    data: {
+      labels: cats.length ? cats.map(c => c.category) : ['No blocked traffic yet'],
+      datasets: [{ data: cats.length ? cats.map(c => c.count) : [1],
+        backgroundColor: ['#ef4444','#3b82f6','#f59e0b','#22c55e','#8b5cf6'],
+        borderWidth: 2, borderColor: '#2d3748' }]
+    },
+    options: {
+      responsive: true, cutout: '60%',
+      plugins: { legend:{ position:'bottom', labels:{color:'#94a3b8', font:{size:11}, padding:12, boxWidth:12} } }
+    }
+  });
+
+  renderTopList('topBlocked', r.top_blocked, '#ef4444');
+  renderTopList('topQueried', r.top_queried, '#3b82f6');
+}
+
+function renderTopList(id, items, color) {
+  const max = items[0]?.count || 1;
+  document.getElementById(id).innerHTML = items.length
+    ? items.map((item, i) => `
+      <div class="top-item">
+        <div class="top-rank">#${i+1}</div>
+        <div class="top-domain">${item.domain}</div>
+        <div class="top-bar-bg"><div class="top-bar-fill" style="width:${(item.count/max*100).toFixed(0)}%;background:${color}"></div></div>
+        <div class="top-count">${item.count}</div>
+      </div>`).join('')
+    : '<div class="empty-state">No data yet — run simulate_traffic.py in a second terminal!</div>';
+}
+
+// ── Logs ──────────────────────────────────────────
+async function loadLogs() {
+  const search = document.getElementById('logSearch').value;
+  const action = document.getElementById('logFilter').value;
+  const url = `/api/logs?limit=200${action?'&action='+action:''}${search?'&search='+encodeURIComponent(search):''}`;
+  const logs = await fetch(url).then(r => r.json());
+
+  document.getElementById('logsBody').innerHTML = logs.length
+    ? logs.map(l => `<tr>
+        <td style="color:var(--muted);font-size:11px;font-family:var(--mono)">${l.id}</td>
+        <td class="dm">${l.domain}</td>
+        <td style="color:var(--muted);font-size:11px;font-family:var(--mono)">${l.client_ip}</td>
+        <td><span class="badge badge-${l.action.toLowerCase()}">${l.action}</span></td>
+        <td>${tsCell(l.timestamp)}</td>
+      </tr>`).join('')
+    : '<tr><td colspan="5"><div class="empty-state">No logs yet. Browse some websites or run simulate_traffic.py!</div></td></tr>';
+}
+
+async function clearLogs() {
+  if (!confirm('Delete all logs? This cannot be undone.')) return;
+  await fetch('/api/logs/clear', { method:'POST' });
+  toast('All logs cleared', 'success');
+  loadLogs(); loadStats();
+}
+
+// ── Blocklist ─────────────────────────────────────
+async function loadBlocklist() {
+  const search = document.getElementById('blockSearch').value;
+  const list = await fetch(`/api/blocklist${search?'?search='+encodeURIComponent(search):''}`).then(r => r.json());
+  document.getElementById('blocklistBody').innerHTML = list.length
+    ? list.map(d => `<tr>
+        <td style="color:var(--muted);font-size:11px;font-family:var(--mono)">${d.id}</td>
+        <td class="dm">${d.domain}</td>
+        <td><span class="badge-cat">${d.category}</span></td>
+        <td style="color:var(--muted);font-size:12px">${d.reason||'—'}</td>
+        <td>${tsCell(d.added_at)}</td>
+        <td><button class="btn btn-danger btn-sm" onclick="removeDomain(${d.id})">Remove</button></td>
+      </tr>`).join('')
+    : '<tr><td colspan="6"><div class="empty-state">Blocklist is empty.</div></td></tr>';
+}
+
+async function addDomain() {
+  const domain = document.getElementById('newDomain').value.trim();
+  const category = document.getElementById('newCategory').value;
+  const reason = document.getElementById('newReason').value.trim();
+  if (!domain) { toast('Please enter a domain name', 'danger'); return; }
+  const r = await fetch('/api/blocklist/add', {
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({domain, category, reason})
+  }).then(r => r.json());
+  toast(r.message, r.success ? 'success' : 'danger');
+  if (r.success) {
+    document.getElementById('newDomain').value = '';
+    document.getElementById('newReason').value = '';
+    loadBlocklist(); loadStats();
+  }
+}
+
+async function removeDomain(id) {
+  if (!confirm('Remove this domain from the blocklist?')) return;
+  const r = await fetch(`/api/blocklist/remove/${id}`, {method:'DELETE'}).then(r => r.json());
+  toast(r.message, r.success ? 'success' : 'danger');
+  if (r.success) { loadBlocklist(); loadStats(); }
+}
+
+// ── Test tool ─────────────────────────────────────
+function runTest() {
+  const domain = document.getElementById('testDomain').value.trim();
+  if (!domain) { toast('Please type a domain first', 'danger'); return; }
+  quickTest(domain);
+}
+
+async function quickTest(domain) {
+  document.getElementById('testDomain').value = domain;
+  const r = await fetch(`/api/test?domain=${encodeURIComponent(domain)}`).then(r => r.json());
+  const el = document.getElementById('testResult');
+  const now = new Date().toLocaleString('en-GB', {day:'2-digit',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit',second:'2-digit'});
+  el.style.display = 'block';
+  el.className = 'test-result ' + (r.blocked ? 'blocked' : 'allowed');
+  el.innerHTML = r.blocked
+    ? `🚫 <strong>BLOCKED</strong> — "<strong>${domain}</strong>" is on your blocklist.<br>
+       <span style="font-size:12px;opacity:0.85">Sinkhole returned IP 0.0.0.0. No connection possible. Logged at ${now}.</span>`
+    : `✅ <strong>ALLOWED</strong> — "<strong>${domain}</strong>" is not on your blocklist.<br>
+       <span style="font-size:12px;opacity:0.85">Query forwarded to Google DNS (8.8.8.8). Site loads normally. Logged at ${now}.</span>`;
+  loadStats();
+}
+
+// ── Toggle sinkhole ───────────────────────────────
+let enabled = true;
+async function loadSettings() {
+  const s = await fetch('/api/settings').then(r => r.json());
+  enabled = s.sinkhole_enabled === 'true';
+  updateToggle();
+}
+function updateToggle() {
+  const btn = document.getElementById('toggleBtn');
+  const dot = document.getElementById('dot');
+  const txt = document.getElementById('toggleText');
+  if (enabled) {
+    btn.className = 'toggle-btn';
+    dot.style.cssText = 'background:var(--success);box-shadow:0 0 6px var(--success)';
+    txt.textContent = 'Protection ON';
+  } else {
+    btn.className = 'toggle-btn off';
+    dot.style.cssText = 'background:var(--danger);box-shadow:0 0 6px var(--danger)';
+    txt.textContent = 'Protection OFF';
+  }
+}
+async function toggleSinkhole() {
+  enabled = !enabled;
+  await fetch('/api/settings', {
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({sinkhole_enabled: enabled ? 'true' : 'false'})
+  });
+  updateToggle();
+  toast(enabled ? '✅ Protection turned ON' : '⚠️ Protection is now OFF', enabled ? 'success' : 'danger');
+}
+
+// ── Init ──────────────────────────────────────────
+loadStats();
+loadSettings();
+setInterval(loadStats, 10000);
+</script>
+</body>
+</html>
