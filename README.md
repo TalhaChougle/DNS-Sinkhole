@@ -4,6 +4,8 @@ A Python-based DNS sinkhole with a real-time admin dashboard.
 Intercepts DNS queries, blocks malicious/unwanted domains, logs all traffic, and provides a web UI for management.
 
 ---
+<img width="1919" height="1020" alt="image" src="https://github.com/user-attachments/assets/031663c0-1186-4a21-8921-d184b92b2497" />
+---
 
 ## 📁 Project Structure
 
