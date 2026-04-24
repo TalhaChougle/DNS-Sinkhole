@@ -509,20 +509,29 @@ let demoLogs = [...DEMO_LOGS];
 let nextDemoId = 200;
 
 async function detectMode() {
+  // Not on localhost = always demo
+  if (!window.location.hostname.includes('localhost') && !window.location.hostname.includes('127.0.0.1')) {
+    setDemoMode(); return;
+  }
   try {
-    const r = await fetch('/api/stats', { signal: AbortSignal.timeout(2000) });
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 1500);
+    const r = await fetch('/api/stats', { signal: controller.signal });
+    clearTimeout(timeout);
     if (r.ok) {
       IS_DEMO = false;
       document.getElementById('modeBadge').className = 'mode-badge live';
       document.getElementById('modeBadge').textContent = '● LIVE';
-    }
-  } catch {
-    IS_DEMO = true;
-    document.getElementById('demoBanner').classList.add('show');
-    document.getElementById('modeBadge').className = 'mode-badge demo';
-    document.getElementById('modeBadge').textContent = '● DEMO';
-    document.getElementById('toggleBtn').style.display = 'none';
-  }
+    } else { setDemoMode(); }
+  } catch { setDemoMode(); }
+}
+
+function setDemoMode() {
+  IS_DEMO = true;
+  document.getElementById('demoBanner').classList.add('show');
+  document.getElementById('modeBadge').className = 'mode-badge demo';
+  document.getElementById('modeBadge').textContent = '● DEMO';
+  document.getElementById('toggleBtn').style.display = 'none';
 }
 
 // ═══════════════════════════════════════════════════════
