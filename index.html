@@ -191,6 +191,21 @@
     .quick-btn { padding: 6px 14px; background: var(--panel2); border: 1px solid var(--border); border-radius: 20px; color: var(--text2); font-size: 12px; font-family: var(--mono); cursor: pointer; transition: all .2s; }
     .quick-btn:hover { border-color: var(--accent); color: var(--accent); }
 
+    /* ── Mode switcher (localhost only) ── */
+    #modeSwitcher {
+      display: none; align-items: center; gap: 4px;
+      background: var(--panel2); border: 1px solid var(--border);
+      border-radius: 8px; padding: 4px;
+    }
+    #modeSwitcher.show { display: flex; }
+    .mode-switch-btn {
+      padding: 5px 14px; border-radius: 6px; font-size: 12px; font-weight: 600;
+      border: none; cursor: pointer; transition: all .2s; font-family: var(--font);
+      color: var(--muted); background: transparent;
+    }
+    .mode-switch-btn.active-live { background: rgba(74,222,128,0.2); color: var(--success); }
+    .mode-switch-btn.active-demo { background: rgba(251,191,36,0.2); color: var(--warning); }
+
     /* ── Toast ── */
     #toast { position: fixed; bottom: 24px; right: 24px; z-index: 9999; padding: 12px 20px; border-radius: 10px; font-size: 13px; font-weight: 500; background: var(--panel2); border: 1px solid var(--border); color: var(--text); box-shadow: 0 8px 24px rgba(0,0,0,.4); opacity: 0; transition: opacity .3s; pointer-events: none; }
     #toast.show { opacity: 1; }
@@ -220,6 +235,11 @@
   </div>
   <div class="header-right">
     <div class="live-clock" id="liveClock">--:--:--</div>
+    <!-- Mode switcher — only shown on localhost -->
+    <div id="modeSwitcher">
+      <button class="mode-switch-btn" id="btnLive" onclick="switchMode('live')">⚡ Live</button>
+      <button class="mode-switch-btn" id="btnDemo" onclick="switchMode('demo')">🎮 Demo</button>
+    </div>
     <div class="mode-badge live" id="modeBadge">● LIVE</div>
     <div id="toggleBtn" class="toggle-btn" onclick="toggleSinkhole()">
       <div class="dot" id="dot"></div>
@@ -509,21 +529,16 @@ let demoLogs = [...DEMO_LOGS];
 let nextDemoId = 200;
 
 async function detectMode() {
-  // Not on localhost = always demo
-  if (!window.location.hostname.includes('localhost') && !window.location.hostname.includes('127.0.0.1')) {
-    setDemoMode(); return;
-  }
+  const isLocalhost = window.location.hostname.includes('localhost') || window.location.hostname.includes('127.0.0.1');
+  if (!isLocalhost) { setDemoMode(); return; }
+  document.getElementById('modeSwitcher').classList.add('show');
   try {
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 1500);
     const r = await fetch('/api/stats', { signal: controller.signal });
     clearTimeout(timeout);
-    if (r.ok) {
-      IS_DEMO = false;
-      document.getElementById('modeBadge').className = 'mode-badge live';
-      document.getElementById('modeBadge').textContent = '● LIVE';
-    } else { setDemoMode(); }
-  } catch { setDemoMode(); }
+    if (r.ok) { switchMode('live', true); } else { switchMode('demo', true); }
+  } catch { switchMode('demo', true); }
 }
 
 function setDemoMode() {
@@ -532,6 +547,39 @@ function setDemoMode() {
   document.getElementById('modeBadge').className = 'mode-badge demo';
   document.getElementById('modeBadge').textContent = '● DEMO';
   document.getElementById('toggleBtn').style.display = 'none';
+}
+
+function setLiveMode() {
+  IS_DEMO = false;
+  document.getElementById('demoBanner').classList.remove('show');
+  document.getElementById('modeBadge').className = 'mode-badge live';
+  document.getElementById('modeBadge').textContent = '● LIVE';
+  document.getElementById('toggleBtn').style.display = 'flex';
+}
+
+async function switchMode(mode, silent = false) {
+  if (mode === 'live') {
+    try {
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 1500);
+      const r = await fetch('/api/stats', { signal: controller.signal });
+      clearTimeout(timeout);
+      if (!r.ok) throw new Error();
+      setLiveMode();
+      document.getElementById('btnLive').className = 'mode-switch-btn active-live';
+      document.getElementById('btnDemo').className = 'mode-switch-btn';
+      if (!silent) toast('⚡ Switched to Live Mode — real DNS traffic', 'success');
+    } catch {
+      if (!silent) toast('❌ Flask app not running — cannot use Live Mode', 'danger');
+      switchMode('demo', silent); return;
+    }
+  } else {
+    setDemoMode();
+    document.getElementById('btnDemo').className = 'mode-switch-btn active-demo';
+    document.getElementById('btnLive').className = 'mode-switch-btn';
+    if (!silent) toast('🎮 Switched to Demo Mode — simulated data', 'info');
+  }
+  loadStats(); loadSettings();
 }
 
 // ═══════════════════════════════════════════════════════
@@ -784,7 +832,7 @@ async function init() {
   await detectMode();
   loadStats();
   loadSettings();
-  if (!IS_DEMO) setInterval(loadStats, 10000);
+  setInterval(() => { if (!IS_DEMO) loadStats(); }, 10000);
 }
 init();
 </script>
