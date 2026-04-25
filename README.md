@@ -3,6 +3,7 @@
 > A Python-based DNS sinkhole that intercepts real network traffic, blocks malicious domains before any connection is made, and provides a real-time admin dashboard for monitoring and management.
 
 **🔴 [Live Demo](https://dns-sinkhole.netlify.app)** &nbsp;|&nbsp; **⭐ Star this repo if you find it useful**
+
 ![DNS Sinkhole Dashboard](https://github.com/user-attachments/assets/24562426-47f0-4e2d-8954-e8cb1cfc09fa)
 ---
 
